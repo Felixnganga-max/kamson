@@ -35,7 +35,8 @@ const EpicHeroSection = ({ onBookEvents }) => {
       description: "Kikuyu's Favorite Musical Journey",
       genre: "Traditional Kikuyu",
       mood: "Cultural Celebration",
-      videoSrc: "https://www.youtube.com/embed/zcA7Ru45PwQ?autoplay=1&mute=1",
+      videoSrc:
+        "https://www.youtube.com/embed/zcA7Ru45PwQ?autoplay=1&mute=1?controls=1&modestbranding=1",
       color: {
         overlay: "rgba(0,0,0,0.5)",
         accent: "text-green-300",
@@ -47,7 +48,8 @@ const EpicHeroSection = ({ onBookEvents }) => {
       description: "Unleash Your Inner Rockstar",
       genre: "Interactive Music",
       mood: "Pure Entertainment",
-      videoSrc: "https://www.youtube.com/embed/MCOFegfeVdM?autoplay=1&mute=1",
+      videoSrc:
+        "https://www.youtube.com/embed/MCOFegfeVdM?autoplay=1&mute=1?controls=1&modestbranding=1",
       color: {
         overlay: "rgba(30,64,175,0.5)",
         accent: "text-indigo-300",
@@ -59,7 +61,8 @@ const EpicHeroSection = ({ onBookEvents }) => {
       description: "Dance to the Heartbeat of Africa",
       genre: "Afro-Caribbean",
       mood: "Sensational Groove",
-      videoSrc: "https://www.youtube.com/embed/P51IvKAqaWo?autoplay=1&mute=1",
+      videoSrc:
+        "https://www.youtube.com/embed/P51IvKAqaWo?autoplay=1&mute=1?controls=1&modestbranding=1",
       color: {
         overlay: "rgba(219,39,119,0.4)",
         accent: "text-pink-300",
@@ -265,7 +268,7 @@ const EpicHeroSection = ({ onBookEvents }) => {
       {/* Musical Touchpoints */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center space-y-4 z-40">
         {/* Centered Small Video Player */}
-        <div className="relative w-[40vw] md:w-[30vw] min-w-[200px] max-w-[300px] h-[22vh] md:h-[25vh] min-h-[100px] max-h-[300px] bg-black/30 rounded-lg overflow-hidden">
+        <div className="relative w-[50vw] md:w-[30vw] min-w-[200px] max-w-[300px] h-[22vh] md:h-[25vh] min-h-[100px] max-h-[300px] bg-black/30 rounded-lg overflow-hidden">
           <iframe
             ref={videoRef}
             src={artistImages[currentImage].videoSrc}
