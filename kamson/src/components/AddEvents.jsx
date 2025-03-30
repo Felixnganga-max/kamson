@@ -163,7 +163,7 @@ const AddEvents = () => {
 
       // Send everything to your backend
       const response = await axios.post(
-        "http://localhost:5000/api/events",
+        "https://kamson-558z.vercel.app/api/events",
         formDataToSend,
         {
           headers: {

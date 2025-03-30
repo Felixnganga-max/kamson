@@ -37,7 +37,9 @@ const Events = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get("http://localhost:5000/api/events");
+        const response = await axios.get(
+          "https://kamson-558z.vercel.app/api/events"
+        );
 
         console.log("API Response:", response.data);
 
@@ -142,7 +144,7 @@ const Events = () => {
     }
 
     // Handle local paths
-    return `http://localhost:5000/${imagePath.replace(/^\//, "")}`;
+    return `https://kamson-558z.vercel.app/${imagePath.replace(/^\//, "")}`;
   };
 
   // Loading state

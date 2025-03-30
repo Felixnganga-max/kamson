@@ -46,7 +46,9 @@ const ManageEvents = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get("http://localhost:5000/api/events");
+        const response = await axios.get(
+          "https://kamson-558z.vercel.app/api/events"
+        );
 
         console.log("API Response:", response.data);
 
@@ -147,7 +149,7 @@ const ManageEvents = () => {
       let response;
       if (isEditing && currentEvent) {
         response = await axios.put(
-          `http://localhost:5000/api/events/${currentEvent._id}`,
+          `https://kamson-558z.vercel.app/api/events/${currentEvent._id}`,
           formDataToSend,
           {
             headers: {
@@ -158,7 +160,7 @@ const ManageEvents = () => {
         toast.success("Event updated successfully!");
       } else {
         response = await axios.post(
-          "http://localhost:5000/api/events",
+          "https://kamson-558z.vercel.app/api/events",
           formDataToSend,
           {
             headers: {
@@ -171,7 +173,7 @@ const ManageEvents = () => {
 
       // Refetch events to update all categories
       const refreshResponse = await axios.get(
-        "http://localhost:5000/api/events"
+        "https://kamson-558z.vercel.app/api/events"
       );
       if (
         refreshResponse.data &&
@@ -199,12 +201,12 @@ const ManageEvents = () => {
     try {
       setLoading(true);
       await axios.delete(
-        `http://localhost:5000/api/events/${currentEvent._id}`
+        `https://kamson-558z.vercel.app/api/events/${currentEvent._id}`
       );
 
       // Refetch events to update all categories
       const refreshResponse = await axios.get(
-        "http://localhost:5000/api/events"
+        "https://kamson-558z.vercel.app/api/events"
       );
       if (
         refreshResponse.data &&
@@ -281,7 +283,7 @@ const ManageEvents = () => {
     }
 
     // Fallback for local development (you can remove this if not needed)
-    return `http://localhost:5000/${imagePath.replace(/^\//, "")}`;
+    return `https://kamson-558z.vercel.app/${imagePath.replace(/^\//, "")}`;
   };
 
   // Combine all events for display in the management view
