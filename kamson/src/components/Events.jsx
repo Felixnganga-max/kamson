@@ -25,14 +25,16 @@ const Events = () => {
   const [error, setError] = useState(null);
   const [showMore, setShowMore] = useState(false);
   const [showTodayBanner, setShowTodayBanner] = useState(true);
-  const [showTodayDetails, setShowTodayDetails] = useState(false);
+  const [showTodayDetails, setShowTodayDetails] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalContent, setModalContent] = useState("");
   const [typingText, setTypingText] = useState("");
   const [isTypingComplete, setIsTypingComplete] = useState(false);
   const [countdowns, setCountdowns] = useState({});
+  const [hasShownModal, setHasShownModal] = useState(false);
   const modalRef = useRef(null);
   const todayBannerRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -52,12 +54,8 @@ const Events = () => {
           "https://kamson-558z.vercel.app/api/events"
         );
 
-        console.log("API Response:", response.data);
-
-        if (response.data && response.data.data && response.data.data.events) {
+        if (response.data?.data?.events) {
           const eventsData = response.data.data.events;
-
-          // Set the categorized events directly
           setUpcomingEvents(eventsData.upcoming || []);
           setPastEvents(eventsData.past || []);
           setHappeningToday(eventsData.happeningToday || []);
@@ -76,18 +74,10 @@ const Events = () => {
             }
           });
           setUpcomingSoon(soonEvents);
-
-          setError(null);
-        } else {
-          throw new Error("Unexpected response structure");
         }
       } catch (err) {
         console.error("Error fetching events:", err);
         setError(err.message || "Failed to load events");
-        setUpcomingEvents([]);
-        setPastEvents([]);
-        setHappeningToday([]);
-        setUpcomingSoon([]);
       } finally {
         setLoading(false);
       }
@@ -108,8 +98,6 @@ const Events = () => {
           try {
             const eventDate = new Date(event.date);
             const now = new Date();
-
-            // If event is in the past, skip
             if (eventDate < now) return;
 
             const diff = eventDate - now;
@@ -125,7 +113,7 @@ const Events = () => {
               hours,
               minutes,
               seconds,
-              formatted: `${days}d ${hours}h ${minutes}m`,
+              formatted: `${days}d ${hours}h ${minutes}m ${seconds}s`,
             };
           } catch {
             // Skip if date parsing fails
@@ -139,42 +127,70 @@ const Events = () => {
     return () => clearInterval(interval);
   }, [upcomingEvents]);
 
-  // Typing animation effect
+  // FIX: Typing animation effect
   useEffect(() => {
+    // Only run if modal is showing and we have content
     if (!showModal || !modalContent) return;
 
-    let currentIndex = 0;
-    const typingSpeed = 20; // milliseconds per character
+    // Clear any existing timeouts
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Reset typing states before starting new animation
+    setTypingText("");
+    setIsTypingComplete(false);
+
     const joyfulMessages = [
       "🎉 Exciting news! 🎉",
       "✨ You're in for a treat! ✨",
       "🥳 Let's celebrate! 🥳",
       "🎶 Music magic incoming! 🎶",
     ];
-    const randomMessage =
+    const welcomeMessage =
       joyfulMessages[Math.floor(Math.random() * joyfulMessages.length)];
+    const typingSpeed = 30;
+    let currentIndex = 0;
+    let phase = 0; // 0 = welcome, 1 = pause, 2 = main content
 
-    setTypingText(randomMessage);
-    setIsTypingComplete(false);
-
-    // Start with a joyful message
-    const welcomeTimeout = setTimeout(() => {
-      currentIndex = 0;
-      const typingInterval = setInterval(() => {
+    const typeCharacter = () => {
+      if (phase === 0) {
+        // Typing welcome message
+        if (currentIndex <= welcomeMessage.length) {
+          setTypingText(welcomeMessage.substring(0, currentIndex));
+          currentIndex++;
+          typingTimeoutRef.current = setTimeout(typeCharacter, typingSpeed);
+        } else {
+          // Pause after welcome message is complete
+          phase = 1;
+          typingTimeoutRef.current = setTimeout(typeCharacter, 1000);
+        }
+      } else if (phase === 1) {
+        // Clear welcome message
+        setTypingText("");
+        currentIndex = 0;
+        phase = 2;
+        typingTimeoutRef.current = setTimeout(typeCharacter, 300);
+      } else {
+        // Typing main content
         if (currentIndex <= modalContent.length) {
           setTypingText(modalContent.substring(0, currentIndex));
           currentIndex++;
+          typingTimeoutRef.current = setTimeout(typeCharacter, typingSpeed);
         } else {
-          clearInterval(typingInterval);
           setIsTypingComplete(true);
         }
-      }, typingSpeed);
+      }
+    };
 
-      return () => clearInterval(typingInterval);
-    }, 1500); // Short delay before starting
+    // Start the typing animation
+    typeCharacter();
 
+    // Clean up when component unmounts or modal is closed
     return () => {
-      clearTimeout(welcomeTimeout);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
   }, [showModal, modalContent]);
 
@@ -187,7 +203,7 @@ const Events = () => {
     audio.play().catch((e) => console.log("Audio play failed:", e));
   };
 
-  // Proper form submission handler
+  // Form submission handler
   const handleSubmit = (e) => {
     e.preventDefault();
     const whatsappMessage = `New Service Request:\n\nName: ${formData.name}\nEmail: ${formData.email}\nEvent Type: ${formData.eventType}\nDate: ${formData.date}\nDetails: ${formData.message}`;
@@ -195,75 +211,55 @@ const Events = () => {
       `https://wa.me/254715747992?text=${encodeURIComponent(whatsappMessage)}`,
       "_blank"
     );
+    setFormData({
+      name: "",
+      email: "",
+      eventType: "",
+      date: "",
+      message: "",
+    });
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   // Scroll to today's events
   const scrollToTodayEvents = () => {
     if (todayBannerRef.current) {
-      window.scrollTo({
-        top: todayBannerRef.current.offsetTop - 20,
-        behavior: "smooth",
-      });
-      setShowTodayDetails(true);
+      todayBannerRef.current.scrollIntoView({ behavior: "smooth" });
     }
     setShowModal(false);
   };
 
-  // Intersection Observer for modal trigger
+  // FIX: Show modal for testing regardless of events
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && happeningToday.length > 0) {
-            setModalContent(
-              `We have ${happeningToday.length} amazing event${
-                happeningToday.length > 1 ? "s" : ""
-              } happening today! ${happeningToday
-                .map((event) => event.title)
-                .join(", ")}. Don't miss out on the fun! 🎶`
-            );
-            setShowModal(true);
-            playJoyfulSound();
-          }
-        });
-      },
-      { threshold: 0.5 }
-    );
-
-    if (modalRef.current) {
-      observer.observe(modalRef.current);
-    }
-
-    return () => {
-      if (modalRef.current) {
-        observer.unobserve(modalRef.current);
+    // Add a slight delay to ensure the component is fully mounted
+    const timer = setTimeout(() => {
+      if (happeningToday.length > 0) {
+        setModalContent(
+          `We have ${happeningToday.length} amazing event${
+            happeningToday.length > 1 ? "s" : ""
+          } happening today! ${happeningToday
+            .map((event) => event.title)
+            .join(", ")}. Don't miss out! 🎶`
+        );
+      } else {
+        // For testing: Show modal even if no events today
+        setModalContent(
+          "We have some amazing events coming up soon! Check out our schedule and don't miss out! 🎶"
+        );
       }
-    };
-  }, [happeningToday]);
-
-  // Check for upcoming events in 2 days
-  useEffect(() => {
-    if (upcomingSoon.length > 0) {
-      const message = `Heads up! You have ${upcomingSoon.length} event${
-        upcomingSoon.length > 1 ? "s" : ""
-      } coming up in the next 2 days: ${upcomingSoon
-        .map((e) => e.title)
-        .join(", ")}. Get ready!`;
-      setModalContent(message);
       setShowModal(true);
       playJoyfulSound();
-    }
-  }, [upcomingSoon]);
+      setHasShownModal(true);
+    }, 1000);
 
-  // Format date safely
+    return () => clearTimeout(timer);
+  }, [happeningToday]);
+
+  // Format helpers
   const formatDate = (dateString) => {
     if (!dateString) return "Date not available";
     try {
@@ -274,7 +270,6 @@ const Events = () => {
     }
   };
 
-  // Format time safely
   const formatTime = (timeString, dateString) => {
     if (timeString) {
       if (/^\d{1,2}:\d{2}$/.test(timeString)) {
@@ -304,20 +299,13 @@ const Events = () => {
     return "Time not available";
   };
 
-  // Get image URL with fallback
   const getImageUrl = (imagePath) => {
-    if (!imagePath || imagePath.trim() === "") {
+    if (!imagePath?.trim())
       return "https://via.placeholder.com/400x200?text=No+Image";
-    }
-
-    if (imagePath.startsWith("http") || imagePath.startsWith("https")) {
-      return imagePath;
-    }
-
+    if (imagePath.startsWith("http")) return imagePath;
     return `https://kamson-558z.vercel.app/${imagePath.replace(/^\//, "")}`;
   };
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -327,14 +315,12 @@ const Events = () => {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center">
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-lg text-center">
           <p className="font-bold">Error loading events</p>
           <p>{error}</p>
-          <p className="mt-2 text-sm">Check the console for more details.</p>
         </div>
         <button
           onClick={() => window.location.reload()}
@@ -348,153 +334,123 @@ const Events = () => {
 
   return (
     <div className="w-[95vw] mx-auto px-4 py-12 sm:px-6 lg:px-8 bg-gradient-to-br from-indigo-900/10 via-purple-800/10 to-blue-600/10 relative">
-      {/* Happening Today Banner - Enhanced with more info and animation */}
+      {/* Happening Today Banner */}
       <div ref={todayBannerRef}>
-        <AnimatePresence>
-          {happeningToday.length > 0 && showTodayBanner && (
-            <motion.div
-              initial={{ opacity: 0, y: -50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -50 }}
-              transition={{ duration: 0.3 }}
-              className="mb-8 bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-lg shadow-lg"
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex flex-col">
-                  <div className="flex items-center">
-                    <span className="font-bold text-lg mr-2">
-                      🎉 Happening Today:
-                    </span>
-                    <span className="font-semibold">
-                      {happeningToday.map((event) => event.title).join(", ")}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setShowTodayDetails(!showTodayDetails);
-                      if (!showTodayDetails) {
-                        setTimeout(() => {
-                          window.scrollTo({
-                            top: todayBannerRef.current.offsetTop - 20,
-                            behavior: "smooth",
-                          });
-                        }, 100);
-                      }
-                    }}
-                    className="mt-2 text-white/90 hover:text-white flex items-center text-sm underline"
-                  >
-                    <Info size={16} className="mr-1" />
-                    {showTodayDetails ? "Hide details" : "View details"}
-                  </button>
-                </div>
-                <button
-                  onClick={() => setShowTodayBanner(false)}
-                  className="p-1 rounded-full hover:bg-white/20 transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Expanded details section */}
-              <AnimatePresence>
-                {showTodayDetails && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="mt-3 pt-3 border-t border-white/30"
-                  >
-                    {happeningToday.map((event, index) => (
-                      <div key={event._id || index} className="mb-3 last:mb-0">
-                        <div className="flex flex-col md:flex-row gap-4">
-                          {/* Event Image */}
-                          <div className="md:w-1/3">
-                            <img
-                              src={getImageUrl(event.image)}
-                              alt={event.title || "Event image"}
-                              className="w-full h-48 object-cover rounded-lg shadow-md"
-                              onError={(e) => {
-                                e.target.src =
-                                  "https://via.placeholder.com/400x200?text=Event+Image";
-                              }}
-                            />
-                          </div>
-
-                          <div className="md:w-2/3">
-                            <h4 className="font-bold text-white">
-                              {event.title}
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                              <div className="flex items-center">
-                                <Clock className="h-4 w-4 mr-2 text-white/80" />
-                                <span>
-                                  {formatTime(event.time, event.date)}
-                                </span>
-                              </div>
-                              <div className="flex items-center">
-                                <MapPin className="h-4 w-4 mr-2 text-white/80" />
-                                <span>{event.venue || "Venue TBA"}</span>
-                              </div>
-                              {event.ticketLink && (
-                                <div>
-                                  <a
-                                    href={event.ticketLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md bg-white text-emerald-700 hover:bg-white/90 transition-colors"
-                                  >
-                                    <Ticket className="h-3 w-3 mr-1" />
-                                    Get Tickets
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                            <p className="mt-2 text-sm text-white/80">
-                              {event.description || "No description available"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Upcoming Soon Banner */}
-      <AnimatePresence>
-        {upcomingSoon.length > 0 && (
+        {happeningToday.length > 0 && showTodayBanner && (
           <motion.div
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -50 }}
-            transition={{ duration: 0.3 }}
-            className="mb-8 bg-gradient-to-r from-amber-500 to-orange-600 text-white p-4 rounded-lg shadow-lg"
+            className="mb-8 bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-lg shadow-lg"
           >
             <div className="flex justify-between items-start">
               <div className="flex flex-col">
                 <div className="flex items-center">
-                  <AlertTriangle className="h-5 w-5 mr-2" />
-                  <span className="font-bold text-lg mr-2">Upcoming Soon:</span>
+                  <span className="font-bold text-lg mr-2">
+                    🎉 Happening Today:
+                  </span>
                   <span className="font-semibold">
-                    {upcomingSoon.map((event) => event.title).join(", ")}
+                    {happeningToday.map((event) => event.title).join(", ")}
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-white/90">
-                  These events are happening in the next 2 days!
-                </p>
+                <button
+                  onClick={() => setShowTodayDetails(!showTodayDetails)}
+                  className="mt-2 text-white/90 hover:text-white flex items-center text-sm underline"
+                >
+                  <Info size={16} className="mr-1" />
+                  {showTodayDetails ? "Hide details" : "Show details"}
+                </button>
               </div>
+              <button
+                onClick={() => setShowTodayBanner(false)}
+                className="p-1 rounded-full hover:bg-white/20 transition-colors"
+              >
+                <X size={18} />
+              </button>
             </div>
+
+            {showTodayDetails && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="mt-3 pt-3 border-t border-white/30"
+              >
+                {happeningToday.map((event, index) => (
+                  <div key={event._id || index} className="mb-3 last:mb-0">
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="md:w-1/3">
+                        <img
+                          src={getImageUrl(event.image)}
+                          alt={event.title || "Event"}
+                          className="w-full h-48 object-cover rounded-lg shadow-md"
+                          onError={(e) => {
+                            e.target.src =
+                              "https://via.placeholder.com/400x200?text=Event+Image";
+                          }}
+                        />
+                      </div>
+                      <div className="md:w-2/3">
+                        <h4 className="font-bold text-white">{event.title}</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                          <div className="flex items-center">
+                            <Clock className="h-4 w-4 mr-2 text-white/80" />
+                            <span>{formatTime(event.time, event.date)}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <MapPin className="h-4 w-4 mr-2 text-white/80" />
+                            <span>{event.venue || "Venue TBA"}</span>
+                          </div>
+                          {event.ticketLink && (
+                            <div>
+                              <a
+                                href={event.ticketLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md bg-white text-emerald-700 hover:bg-white/90 transition-colors"
+                              >
+                                <Ticket className="h-3 w-3 mr-1" />
+                                Get Tickets
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm text-white/80">
+                          {event.description || "No description available"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
           </motion.div>
         )}
-      </AnimatePresence>
+      </div>
 
-      {/* Joyful Modal */}
+      {/* Upcoming Soon Banner */}
+      {upcomingSoon.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 bg-gradient-to-r from-amber-500 to-orange-600 text-white p-4 rounded-lg shadow-lg"
+        >
+          <div className="flex justify-between items-start">
+            <div className="flex flex-col">
+              <div className="flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2" />
+                <span className="font-bold text-lg mr-2">Upcoming Soon:</span>
+                <span className="font-semibold">
+                  {upcomingSoon.map((event) => event.title).join(", ")}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-white/90">
+                These events are happening in the next 2 days!
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Joyful Modal - FIXED */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -512,11 +468,8 @@ const Events = () => {
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
               className="bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl shadow-2xl max-w-md w-full p-6 relative overflow-hidden"
               onClick={(e) => e.stopPropagation()}
+              ref={modalRef}
             >
-              {/* Decorative elements */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-300/20 rounded-full -mr-16 -mt-16"></div>
-              <div className="absolute bottom-0 left-0 w-48 h-48 bg-pink-300/20 rounded-full -ml-24 -mb-24"></div>
-
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500">
@@ -531,9 +484,9 @@ const Events = () => {
                 </div>
 
                 <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 min-h-32">
-                  <p className="text-gray-800 font-medium">
+                  <p className="text-gray-800 font-medium min-h-[4rem]">
                     {typingText}
-                    {!isTypingComplete && (
+                    {!isTypingComplete && typingText.length > 0 && (
                       <span className="ml-1 inline-block w-2 h-5 bg-purple-500 animate-pulse"></span>
                     )}
                   </p>
@@ -549,7 +502,7 @@ const Events = () => {
                         onClick={scrollToTodayEvents}
                         className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-pink-600 transition-all shadow-md"
                       >
-                        Click here & scroll a bit to view event details
+                        View Event Details
                       </button>
                     </motion.div>
                   )}
@@ -560,7 +513,7 @@ const Events = () => {
         )}
       </AnimatePresence>
 
-      {/* Header */}
+      {/* Main content */}
       <motion.div
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
@@ -575,34 +528,24 @@ const Events = () => {
         </p>
       </motion.div>
 
-      {/* Modal trigger element (hidden) */}
-      <div ref={modalRef} className="absolute top-0 h-1 w-full"></div>
-
       {/* Tab Interface */}
       <Tab.Group selectedIndex={selectedTab} onChange={setSelectedTab}>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6 }}
-        >
-          <Tab.List className="flex space-x-1 rounded-xl bg-gradient-to-r from-purple-200/30 to-pink-200/30 p-1 max-w-2xl mx-auto">
-            {["Upcoming Events", "Past Events", "Book Services"].map((tab) => (
-              <Tab
-                key={tab}
-                className={({ selected }) =>
-                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5 transition-all duration-300
-                    ${
-                      selected
-                        ? "bg-white shadow-lg text-purple-900"
-                        : "text-purple-700 hover:bg-white/[0.12] hover:text-purple-600"
-                    }`
-                }
-              >
-                {tab}
-              </Tab>
-            ))}
-          </Tab.List>
-        </motion.div>
+        <Tab.List className="flex space-x-1 rounded-xl bg-gradient-to-r from-purple-200/30 to-pink-200/30 p-1 max-w-2xl mx-auto">
+          {["Upcoming Events", "Past Events", "Book Services"].map((tab) => (
+            <Tab
+              key={tab}
+              className={({ selected }) =>
+                `w-full rounded-lg py-2.5 text-sm font-medium leading-5 transition-all duration-300 ${
+                  selected
+                    ? "bg-white shadow-lg text-purple-900"
+                    : "text-purple-700 hover:bg-white/[0.12] hover:text-purple-600"
+                }`
+              }
+            >
+              {tab}
+            </Tab>
+          ))}
+        </Tab.List>
 
         <Tab.Panels className="mt-8">
           {/* Upcoming Events Panel */}
@@ -626,19 +569,17 @@ const Events = () => {
                         transition={{ duration: 0.6, delay: index * 0.1 }}
                         className="bg-white rounded-lg shadow-2xl overflow-hidden border-2 border-purple-100 hover:border-pink-200 transition-all relative h-full flex flex-col"
                       >
-                        {/* Countdown Badge */}
                         {event.date && countdowns[event._id || event.title] && (
                           <div className="absolute top-4 right-4 bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
                             {countdowns[event._id || event.title].formatted}
                           </div>
                         )}
 
-                        {/* Event Image with increased height */}
                         <div className="h-64 overflow-hidden">
                           <img
                             src={getImageUrl(event.image)}
-                            alt={event.title || "Event image"}
-                            className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
+                            alt={event.title || "Event"}
+                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                             onError={(e) => {
                               e.target.src =
                                 "https://via.placeholder.com/400x200?text=Event+Image";
@@ -646,7 +587,6 @@ const Events = () => {
                           />
                         </div>
 
-                        {/* Event Content */}
                         <div className="p-6 bg-gradient-to-br from-white to-purple-50 flex-grow">
                           <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500">
                             {event.title || "Untitled Event"}
@@ -656,7 +596,6 @@ const Events = () => {
                             {event.description || "No description available"}
                           </p>
 
-                          {/* Event Details */}
                           <div className="mt-4 space-y-2">
                             <div className="flex items-center text-gray-700">
                               <Calendar className="h-5 w-5 mr-2 text-purple-500" />
@@ -680,7 +619,6 @@ const Events = () => {
                             </div>
                           </div>
 
-                          {/* Action Button */}
                           <div className="mt-6">
                             {event.ticketLink ? (
                               <a
@@ -737,12 +675,11 @@ const Events = () => {
                     transition={{ duration: 0.6, delay: index * 0.1 }}
                     className="bg-white rounded-lg shadow-2xl overflow-hidden border-2 border-purple-100 hover:border-pink-200 transition-all relative h-full flex flex-col"
                   >
-                    {/* Event Image with increased height */}
                     <div className="h-64 overflow-hidden">
                       <img
                         src={getImageUrl(event.image)}
-                        alt={event.title || "Event image"}
-                        className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-300"
+                        alt={event.title || "Event"}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
                           e.target.src =
                             "https://via.placeholder.com/400x200?text=Event+Image";
@@ -750,7 +687,6 @@ const Events = () => {
                       />
                     </div>
 
-                    {/* Event Content */}
                     <div className="p-6 bg-gradient-to-br from-white to-purple-50 flex-grow">
                       <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500">
                         {event.title || "Untitled Event"}
@@ -760,7 +696,6 @@ const Events = () => {
                         {event.description || "No description available"}
                       </p>
 
-                      {/* Event Details */}
                       <div className="mt-4 space-y-2">
                         <div className="flex items-center text-gray-700">
                           <Calendar className="h-5 w-5 mr-2 text-purple-500" />
@@ -784,7 +719,6 @@ const Events = () => {
                         </div>
                       </div>
 
-                      {/* Action Button */}
                       {event.youtubeLink && (
                         <div className="mt-6">
                           <a
