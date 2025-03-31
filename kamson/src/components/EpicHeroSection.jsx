@@ -211,7 +211,7 @@ const EpicHeroSection = ({ onBookEvents }) => {
             icon: Instagram,
             color: "text-pink-500 hover:text-pink-300",
             handle: "@artistjourney",
-            link: "#instagram",
+            link: "https://www.instagram.com/kamsonofficial?igsh=MWQyMGxoMWYwNW9iMA%3D%3D&utm_source=qr",
           },
           {
             icon: YoutubeIcon,
@@ -223,13 +223,13 @@ const EpicHeroSection = ({ onBookEvents }) => {
             icon: FacebookIcon,
             color: "text-blue-600 hover:text-blue-400",
             handle: "ArtistOfficial",
-            link: "#facebook",
+            link: "https://www.facebook.com/share/1Es47DVu92/?mibextid=wwXIfr",
           },
           {
             icon: Twitter,
             color: "text-sky-500 hover:text-sky-300",
             handle: "@ArtistVoice",
-            link: "#twitter",
+            link: "https://x.com/kamson254?s=21",
           },
         ].map((social, index) => (
           <motion.a

@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const connectDB = require("../src/config/database");
 const eventRoutes = require("../src/routers/eventRouters");
 const authRoutes = require("./routers/authRoutes");
+const mediaRoutes = require("./routers/mediaRoutes");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
@@ -44,7 +45,7 @@ app.use(
 
 // Set payload size limits
 app.use(express.json({ limit: "25mb" }));
-app.use(express.urlencoded({ limit: "25mb", extended: true }));
+app.use(express.urlencoded({ limit: "800mb", extended: true }));
 
 // Apply rate limiting to API routes
 app.use("/api", limiter);
@@ -52,6 +53,7 @@ app.use("/api", limiter);
 // Routes
 app.use("/api/events", eventRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/media", mediaRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

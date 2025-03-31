@@ -33,10 +33,10 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
+  limits: { fileSize: 800 * 1024 * 1024 }, // 20MB limit
 });
 
-// Upload to Cloudinary
+// For large video uploads, use stream-based approach instead of base64
 const uploadToCloudinary = async (
   fileBuffer,
   mimetype,
@@ -46,23 +46,53 @@ const uploadToCloudinary = async (
     if (!fileBuffer) throw new Error("No file provided");
 
     const fileType = mimetype.startsWith("video/") ? "video" : "image";
-    const base64File = `data:${mimetype};base64,${fileBuffer.toString(
-      "base64"
-    )}`;
 
-    const result = await cloudinary.uploader.upload(base64File, {
-      folder: folder,
-      resource_type: fileType,
-      allowed_formats: ["jpg", "jpeg", "png", "gif", "webp", "mp4"],
+    // Create a promise to handle the upload
+    return new Promise((resolve, reject) => {
+      // For video uploads, use a more efficient approach
+      if (fileType === "video") {
+        // Create a Readable stream from the buffer
+        const streamifier = require("streamifier");
+        const stream = streamifier.createReadStream(fileBuffer);
+
+        // Use Cloudinary's upload_stream API
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: folder,
+            resource_type: fileType,
+            chunk_size: 6000000, // 6MB chunks
+            timeout: 120000, // Longer timeout for videos (120s)
+          },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result.secure_url);
+          }
+        );
+
+        stream.pipe(uploadStream);
+      } else {
+        // For images, base64 is fine
+        const base64File = `data:${mimetype};base64,${fileBuffer.toString(
+          "base64"
+        )}`;
+        cloudinary.uploader.upload(
+          base64File,
+          {
+            folder: folder,
+            resource_type: fileType,
+          },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result.secure_url);
+          }
+        );
+      }
     });
-
-    return result.secure_url;
   } catch (error) {
-    console.error("Cloudinary Upload Error:", error.message);
-    throw new Error("File upload failed");
+    console.error("Cloudinary upload error:", error);
+    throw new Error(`File upload failed: ${error.message}`);
   }
 };
-
 // Delete from Cloudinary
 const deleteFromCloudinary = async (fileUrl) => {
   try {

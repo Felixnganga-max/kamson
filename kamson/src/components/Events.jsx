@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tab } from "@headlessui/react";
 import {
@@ -9,6 +9,8 @@ import {
   Youtube,
   Loader2,
   X,
+  Info,
+  AlertTriangle,
 } from "lucide-react";
 import axios from "axios";
 
@@ -18,10 +20,19 @@ const Events = () => {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [pastEvents, setPastEvents] = useState([]);
   const [happeningToday, setHappeningToday] = useState([]);
+  const [upcomingSoon, setUpcomingSoon] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showMore, setShowMore] = useState(false);
   const [showTodayBanner, setShowTodayBanner] = useState(true);
+  const [showTodayDetails, setShowTodayDetails] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalContent, setModalContent] = useState("");
+  const [typingText, setTypingText] = useState("");
+  const [isTypingComplete, setIsTypingComplete] = useState(false);
+  const [countdowns, setCountdowns] = useState({});
+  const modalRef = useRef(null);
+  const todayBannerRef = useRef(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -43,7 +54,6 @@ const Events = () => {
 
         console.log("API Response:", response.data);
 
-        // Extract events data from nested structure
         if (response.data && response.data.data && response.data.data.events) {
           const eventsData = response.data.data.events;
 
@@ -52,9 +62,20 @@ const Events = () => {
           setPastEvents(eventsData.past || []);
           setHappeningToday(eventsData.happeningToday || []);
 
-          console.log("Upcoming events:", eventsData.upcoming);
-          console.log("Past events:", eventsData.past);
-          console.log("Happening today:", eventsData.happeningToday);
+          // Find events happening in the next 2 days
+          const soonEvents = (eventsData.upcoming || []).filter((event) => {
+            if (!event.date) return false;
+            try {
+              const eventDate = new Date(event.date);
+              const today = new Date();
+              const timeDiff = eventDate.getTime() - today.getTime();
+              const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+              return daysDiff > 0 && daysDiff <= 2;
+            } catch {
+              return false;
+            }
+          });
+          setUpcomingSoon(soonEvents);
 
           setError(null);
         } else {
@@ -66,6 +87,7 @@ const Events = () => {
         setUpcomingEvents([]);
         setPastEvents([]);
         setHappeningToday([]);
+        setUpcomingSoon([]);
       } finally {
         setLoading(false);
       }
@@ -74,20 +96,172 @@ const Events = () => {
     fetchData();
   }, []);
 
-  // Form handlers
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  // Initialize countdown timers for upcoming events
+  useEffect(() => {
+    if (upcomingEvents.length === 0) return;
+
+    const interval = setInterval(() => {
+      const newCountdowns = {};
+
+      upcomingEvents.forEach((event) => {
+        if (event.date) {
+          try {
+            const eventDate = new Date(event.date);
+            const now = new Date();
+
+            // If event is in the past, skip
+            if (eventDate < now) return;
+
+            const diff = eventDate - now;
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor(
+              (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+            );
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+            newCountdowns[event._id || event.title] = {
+              days,
+              hours,
+              minutes,
+              seconds,
+              formatted: `${days}d ${hours}h ${minutes}m`,
+            };
+          } catch {
+            // Skip if date parsing fails
+          }
+        }
+      });
+
+      setCountdowns(newCountdowns);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [upcomingEvents]);
+
+  // Typing animation effect
+  useEffect(() => {
+    if (!showModal || !modalContent) return;
+
+    let currentIndex = 0;
+    const typingSpeed = 20; // milliseconds per character
+    const joyfulMessages = [
+      "🎉 Exciting news! 🎉",
+      "✨ You're in for a treat! ✨",
+      "🥳 Let's celebrate! 🥳",
+      "🎶 Music magic incoming! 🎶",
+    ];
+    const randomMessage =
+      joyfulMessages[Math.floor(Math.random() * joyfulMessages.length)];
+
+    setTypingText(randomMessage);
+    setIsTypingComplete(false);
+
+    // Start with a joyful message
+    const welcomeTimeout = setTimeout(() => {
+      currentIndex = 0;
+      const typingInterval = setInterval(() => {
+        if (currentIndex <= modalContent.length) {
+          setTypingText(modalContent.substring(0, currentIndex));
+          currentIndex++;
+        } else {
+          clearInterval(typingInterval);
+          setIsTypingComplete(true);
+        }
+      }, typingSpeed);
+
+      return () => clearInterval(typingInterval);
+    }, 1500); // Short delay before starting
+
+    return () => {
+      clearTimeout(welcomeTimeout);
+    };
+  }, [showModal, modalContent]);
+
+  // Play sound when modal opens
+  const playJoyfulSound = () => {
+    const audio = new Audio(
+      "https://assets.mixkit.co/sfx/preview/mixkit-positive-interface-beep-221.mp3"
+    );
+    audio.volume = 0.3;
+    audio.play().catch((e) => console.log("Audio play failed:", e));
   };
 
+  // Proper form submission handler
   const handleSubmit = (e) => {
     e.preventDefault();
     const whatsappMessage = `New Service Request:\n\nName: ${formData.name}\nEmail: ${formData.email}\nEvent Type: ${formData.eventType}\nDate: ${formData.date}\nDetails: ${formData.message}`;
     window.open(
-      `https://wa.me/254797743366?text=${encodeURIComponent(whatsappMessage)}`,
+      `https://wa.me/254715747992?text=${encodeURIComponent(whatsappMessage)}`,
       "_blank"
     );
   };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Scroll to today's events
+  const scrollToTodayEvents = () => {
+    if (todayBannerRef.current) {
+      window.scrollTo({
+        top: todayBannerRef.current.offsetTop - 20,
+        behavior: "smooth",
+      });
+      setShowTodayDetails(true);
+    }
+    setShowModal(false);
+  };
+
+  // Intersection Observer for modal trigger
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && happeningToday.length > 0) {
+            setModalContent(
+              `We have ${happeningToday.length} amazing event${
+                happeningToday.length > 1 ? "s" : ""
+              } happening today! ${happeningToday
+                .map((event) => event.title)
+                .join(", ")}. Don't miss out on the fun! 🎶`
+            );
+            setShowModal(true);
+            playJoyfulSound();
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    if (modalRef.current) {
+      observer.observe(modalRef.current);
+    }
+
+    return () => {
+      if (modalRef.current) {
+        observer.unobserve(modalRef.current);
+      }
+    };
+  }, [happeningToday]);
+
+  // Check for upcoming events in 2 days
+  useEffect(() => {
+    if (upcomingSoon.length > 0) {
+      const message = `Heads up! You have ${upcomingSoon.length} event${
+        upcomingSoon.length > 1 ? "s" : ""
+      } coming up in the next 2 days: ${upcomingSoon
+        .map((e) => e.title)
+        .join(", ")}. Get ready!`;
+      setModalContent(message);
+      setShowModal(true);
+      playJoyfulSound();
+    }
+  }, [upcomingSoon]);
 
   // Format date safely
   const formatDate = (dateString) => {
@@ -102,9 +276,7 @@ const Events = () => {
 
   // Format time safely
   const formatTime = (timeString, dateString) => {
-    // First try using the time field if available
     if (timeString) {
-      // Handle "HH:MM" format
       if (/^\d{1,2}:\d{2}$/.test(timeString)) {
         const [hours, minutes] = timeString.split(":");
         const time = new Date();
@@ -115,10 +287,9 @@ const Events = () => {
           minute: "2-digit",
         });
       }
-      return timeString; // Return as-is if not standard format
+      return timeString;
     }
 
-    // Fallback to date field's time
     if (dateString) {
       try {
         return new Date(dateString).toLocaleTimeString("en-US", {
@@ -143,7 +314,6 @@ const Events = () => {
       return imagePath;
     }
 
-    // Handle local paths
     return `https://kamson-558z.vercel.app/${imagePath.replace(/^\//, "")}`;
   };
 
@@ -178,26 +348,214 @@ const Events = () => {
 
   return (
     <div className="w-[95vw] mx-auto px-4 py-12 sm:px-6 lg:px-8 bg-gradient-to-br from-indigo-900/10 via-purple-800/10 to-blue-600/10 relative">
-      {/* Happening Today Banner */}
+      {/* Happening Today Banner - Enhanced with more info and animation */}
+      <div ref={todayBannerRef}>
+        <AnimatePresence>
+          {happeningToday.length > 0 && showTodayBanner && (
+            <motion.div
+              initial={{ opacity: 0, y: -50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
+              transition={{ duration: 0.3 }}
+              className="mb-8 bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-lg shadow-lg"
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex flex-col">
+                  <div className="flex items-center">
+                    <span className="font-bold text-lg mr-2">
+                      🎉 Happening Today:
+                    </span>
+                    <span className="font-semibold">
+                      {happeningToday.map((event) => event.title).join(", ")}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowTodayDetails(!showTodayDetails);
+                      if (!showTodayDetails) {
+                        setTimeout(() => {
+                          window.scrollTo({
+                            top: todayBannerRef.current.offsetTop - 20,
+                            behavior: "smooth",
+                          });
+                        }, 100);
+                      }
+                    }}
+                    className="mt-2 text-white/90 hover:text-white flex items-center text-sm underline"
+                  >
+                    <Info size={16} className="mr-1" />
+                    {showTodayDetails ? "Hide details" : "View details"}
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowTodayBanner(false)}
+                  className="p-1 rounded-full hover:bg-white/20 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Expanded details section */}
+              <AnimatePresence>
+                {showTodayDetails && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="mt-3 pt-3 border-t border-white/30"
+                  >
+                    {happeningToday.map((event, index) => (
+                      <div key={event._id || index} className="mb-3 last:mb-0">
+                        <div className="flex flex-col md:flex-row gap-4">
+                          {/* Event Image */}
+                          <div className="md:w-1/3">
+                            <img
+                              src={getImageUrl(event.image)}
+                              alt={event.title || "Event image"}
+                              className="w-full h-48 object-cover rounded-lg shadow-md"
+                              onError={(e) => {
+                                e.target.src =
+                                  "https://via.placeholder.com/400x200?text=Event+Image";
+                              }}
+                            />
+                          </div>
+
+                          <div className="md:w-2/3">
+                            <h4 className="font-bold text-white">
+                              {event.title}
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                              <div className="flex items-center">
+                                <Clock className="h-4 w-4 mr-2 text-white/80" />
+                                <span>
+                                  {formatTime(event.time, event.date)}
+                                </span>
+                              </div>
+                              <div className="flex items-center">
+                                <MapPin className="h-4 w-4 mr-2 text-white/80" />
+                                <span>{event.venue || "Venue TBA"}</span>
+                              </div>
+                              {event.ticketLink && (
+                                <div>
+                                  <a
+                                    href={event.ticketLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md bg-white text-emerald-700 hover:bg-white/90 transition-colors"
+                                  >
+                                    <Ticket className="h-3 w-3 mr-1" />
+                                    Get Tickets
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                            <p className="mt-2 text-sm text-white/80">
+                              {event.description || "No description available"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Upcoming Soon Banner */}
       <AnimatePresence>
-        {happeningToday.length > 0 && showTodayBanner && (
+        {upcomingSoon.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -50 }}
             transition={{ duration: 0.3 }}
-            className="absolute top-4 left-4 right-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white p-3 rounded-lg shadow-lg z-10 flex justify-between items-center"
+            className="mb-8 bg-gradient-to-r from-amber-500 to-orange-600 text-white p-4 rounded-lg shadow-lg"
           >
-            <div className="flex items-center">
-              <span className="font-bold mr-2">🎉 Happening Today:</span>
-              {happeningToday.map((event) => event.title).join(", ")}
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col">
+                <div className="flex items-center">
+                  <AlertTriangle className="h-5 w-5 mr-2" />
+                  <span className="font-bold text-lg mr-2">Upcoming Soon:</span>
+                  <span className="font-semibold">
+                    {upcomingSoon.map((event) => event.title).join(", ")}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-white/90">
+                  These events are happening in the next 2 days!
+                </p>
+              </div>
             </div>
-            <button
-              onClick={() => setShowTodayBanner(false)}
-              className="p-1 rounded-full hover:bg-white/20 transition-colors"
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Joyful Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 50 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, y: 50 }}
+              transition={{ type: "spring", damping: 20, stiffness: 300 }}
+              className="bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl shadow-2xl max-w-md w-full p-6 relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
             >
-              <X size={18} />
-            </button>
+              {/* Decorative elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-300/20 rounded-full -mr-16 -mt-16"></div>
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-pink-300/20 rounded-full -ml-24 -mb-24"></div>
+
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500">
+                    🎉 Exciting News!
+                  </h3>
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="p-1 rounded-full hover:bg-white/30 transition-colors"
+                  >
+                    <X size={20} className="text-purple-700" />
+                  </button>
+                </div>
+
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 min-h-32">
+                  <p className="text-gray-800 font-medium">
+                    {typingText}
+                    {!isTypingComplete && (
+                      <span className="ml-1 inline-block w-2 h-5 bg-purple-500 animate-pulse"></span>
+                    )}
+                  </p>
+
+                  {isTypingComplete && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
+                      className="mt-4 flex justify-center"
+                    >
+                      <button
+                        onClick={scrollToTodayEvents}
+                        className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-pink-600 transition-all shadow-md"
+                      >
+                        Click here & scroll a bit to view event details
+                      </button>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -216,6 +574,9 @@ const Events = () => {
           Experience our music live or book us for your special event
         </p>
       </motion.div>
+
+      {/* Modal trigger element (hidden) */}
+      <div ref={modalRef} className="absolute top-0 h-1 w-full"></div>
 
       {/* Tab Interface */}
       <Tab.Group selectedIndex={selectedTab} onChange={setSelectedTab}>
@@ -265,8 +626,15 @@ const Events = () => {
                         transition={{ duration: 0.6, delay: index * 0.1 }}
                         className="bg-white rounded-lg shadow-2xl overflow-hidden border-2 border-purple-100 hover:border-pink-200 transition-all relative h-full flex flex-col"
                       >
-                        {/* Event Image */}
-                        <div className="aspect-video overflow-hidden">
+                        {/* Countdown Badge */}
+                        {event.date && countdowns[event._id || event.title] && (
+                          <div className="absolute top-4 right-4 bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
+                            {countdowns[event._id || event.title].formatted}
+                          </div>
+                        )}
+
+                        {/* Event Image with increased height */}
+                        <div className="h-64 overflow-hidden">
                           <img
                             src={getImageUrl(event.image)}
                             alt={event.title || "Event image"}
@@ -284,7 +652,7 @@ const Events = () => {
                             {event.title || "Untitled Event"}
                           </h3>
 
-                          <p className="mt-2 text-gray-700 line-clamp-2">
+                          <p className="mt-2 text-gray-700 line-clamp-3">
                             {event.description || "No description available"}
                           </p>
 
@@ -369,8 +737,8 @@ const Events = () => {
                     transition={{ duration: 0.6, delay: index * 0.1 }}
                     className="bg-white rounded-lg shadow-2xl overflow-hidden border-2 border-purple-100 hover:border-pink-200 transition-all relative h-full flex flex-col"
                   >
-                    {/* Event Image */}
-                    <div className="aspect-video overflow-hidden">
+                    {/* Event Image with increased height */}
+                    <div className="h-64 overflow-hidden">
                       <img
                         src={getImageUrl(event.image)}
                         alt={event.title || "Event image"}
@@ -388,7 +756,7 @@ const Events = () => {
                         {event.title || "Untitled Event"}
                       </h3>
 
-                      <p className="mt-2 text-gray-700 line-clamp-2">
+                      <p className="mt-2 text-gray-700 line-clamp-3">
                         {event.description || "No description available"}
                       </p>
 

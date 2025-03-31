@@ -1,53 +1,107 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Camera, X } from "lucide-react";
+import { Play, Camera, X, ChevronDown } from "lucide-react";
 import assets from "../assets/assets";
 
-// Mock Data
+// All items are now videos
 const mediaItems = [
+  // Performance Videos
   {
     id: 1,
     type: "video",
     title: "Nairobi Jazz Festival",
-    src: "https://example.com/video1.mp4",
+    src: "https://www.youtube.com/embed/P51IvKAqaWo",
     thumbnail: assets.three,
     category: "performance",
   },
   {
     id: 2,
-    type: "image",
-    title: "Studio Vocal Session",
-    src: assets.two,
-    category: "behind-the-scenes",
+    type: "video",
+    title: "Acoustic Live Stream",
+    src: "https://www.youtube.com/embed/zcA7Ru45PwQ",
+    thumbnail: assets.two,
+    category: "performance",
   },
   {
     id: 3,
     type: "video",
-    title: "Acoustic Live Stream",
-    src: "https://example.com/video2.mp4",
+    title: "Crowd Interaction",
+    src: "https://www.youtube.com/embed/MCOFegfeVdM",
     thumbnail: assets.two,
     category: "performance",
   },
   {
     id: 4,
-    type: "image",
-    title: "Soundcheck Moments",
-    src: assets.three,
-    category: "behind-the-scenes",
+    type: "video",
+    title: "Live Concert Highlights",
+    src: "https://www.youtube.com/embed/P51IvKAqaWo",
+    thumbnail: assets.three,
+    category: "performance",
   },
   {
     id: 5,
     type: "video",
-    title: "Crowd Interaction",
-    src: "https://example.com/video3.mp4",
+    title: "Unplugged Session",
+    src: "https://www.youtube.com/embed/zcA7Ru45PwQ",
     thumbnail: assets.two,
     category: "performance",
   },
   {
     id: 6,
-    type: "image",
-    title: "Makeup Prep",
-    src: assets.three,
+    type: "video",
+    title: "Festival Performance",
+    src: "https://www.youtube.com/embed/MCOFegfeVdM",
+    thumbnail: assets.three,
+    category: "performance",
+  },
+
+  // Behind-the-scenes Videos
+  {
+    id: 7,
+    type: "video",
+    title: "Studio Recording Session",
+    src: "https://www.youtube.com/embed/P51IvKAqaWo",
+    thumbnail: assets.three,
+    category: "behind-the-scenes",
+  },
+  {
+    id: 8,
+    type: "video",
+    title: "Backstage Interview",
+    src: "https://www.youtube.com/embed/zcA7Ru45PwQ",
+    thumbnail: assets.two,
+    category: "behind-the-scenes",
+  },
+  {
+    id: 9,
+    type: "video",
+    title: "Tour Bus Diary",
+    src: "https://www.youtube.com/embed/MCOFegfeVdM",
+    thumbnail: assets.three,
+    category: "behind-the-scenes",
+  },
+  {
+    id: 10,
+    type: "video",
+    title: "Sound Check Preparation",
+    src: "https://www.youtube.com/embed/P51IvKAqaWo",
+    thumbnail: assets.two,
+    category: "behind-the-scenes",
+  },
+  {
+    id: 11,
+    type: "video",
+    title: "Makeup and Wardrobe",
+    src: "https://www.youtube.com/embed/zcA7Ru45PwQ",
+    thumbnail: assets.three,
+    category: "behind-the-scenes",
+  },
+  {
+    id: 12,
+    type: "video",
+    title: "Fan Meet & Greet",
+    src: "https://www.youtube.com/embed/MCOFegfeVdM",
+    thumbnail: assets.two,
     category: "behind-the-scenes",
   },
 ];
@@ -55,10 +109,33 @@ const mediaItems = [
 const Gallery = () => {
   const [activeFilter, setActiveFilter] = useState("performance");
   const [selectedMedia, setSelectedMedia] = useState(null);
+  const [showCount, setShowCount] = useState(6); // Initially show 6 videos (2 rows of 3)
 
-  const filteredItems = mediaItems.filter(
-    (item) => activeFilter === "all" || item.category === activeFilter
-  );
+  // Filter media items by category and limit by showCount
+  const filteredItems = mediaItems
+    .filter((item) => item.category === activeFilter)
+    .slice(0, showCount);
+
+  // Check if there are more items to show
+  const hasMore =
+    mediaItems.filter((item) => item.category === activeFilter).length >
+    showCount;
+
+  // Handle show more button click
+  const handleShowMore = () => {
+    // On small screens, show 4 more after first 4
+    // On larger screens, show 3 more (one more row)
+    setShowCount((prevCount) => {
+      const increment = window.innerWidth < 640 ? 4 : 3;
+      return prevCount + increment;
+    });
+  };
+
+  // Reset show count when changing filters
+  const handleFilterChange = (filter) => {
+    setActiveFilter(filter);
+    setShowCount(window.innerWidth < 640 ? 4 : 6); // Reset to initial count based on screen size
+  };
 
   // Musical entrance animations
   const containerVariants = {
@@ -128,7 +205,7 @@ const Gallery = () => {
               <motion.button
                 key={filter}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setActiveFilter(filter)}
+                onClick={() => handleFilterChange(filter)}
                 className={`px-6 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
                   activeFilter === filter
                     ? "bg-white text-black"
@@ -166,7 +243,7 @@ const Gallery = () => {
                 {/* Media Card with Always Visible Elements */}
                 <div className="aspect-square overflow-hidden rounded-xl bg-gray-900 relative">
                   <img
-                    src={item.thumbnail || item.src}
+                    src={item.thumbnail}
                     alt={item.title}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     loading="lazy"
@@ -174,17 +251,11 @@ const Gallery = () => {
 
                   {/* Always Visible Overlay */}
                   <div className="absolute inset-0 bg-black/20 flex flex-col justify-between p-4">
-                    {/* Play/View Button */}
+                    {/* Play Button */}
                     <div className="self-end">
-                      {item.type === "video" ? (
-                        <div className="bg-white p-3 rounded-full shadow-xl">
-                          <Play className="text-purple-600" size={24} />
-                        </div>
-                      ) : (
-                        <div className="bg-white/90 px-4 py-2 rounded-full">
-                          <span className="font-medium text-black">View</span>
-                        </div>
-                      )}
+                      <div className="bg-white p-3 rounded-full shadow-xl">
+                        <Play className="text-purple-600" size={24} />
+                      </div>
                     </div>
 
                     {/* Floating Label */}
@@ -215,6 +286,26 @@ const Gallery = () => {
           </AnimatePresence>
         </motion.div>
 
+        {/* Show More Button */}
+        {hasMore && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="mt-10 text-center"
+          >
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleShowMore}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 py-3 px-8 rounded-full inline-flex items-center gap-2 text-white font-medium shadow-lg hover:shadow-xl transition-all"
+            >
+              Show More
+              <ChevronDown size={18} />
+            </motion.button>
+          </motion.div>
+        )}
+
         {/* Lightbox Modal */}
         <AnimatePresence>
           {selectedMedia && (
@@ -239,26 +330,16 @@ const Gallery = () => {
                   <X size={28} />
                 </button>
 
-                {selectedMedia.type === "video" ? (
-                  <div className="aspect-video bg-black rounded-xl overflow-hidden">
-                    <video
-                      controls
-                      autoPlay
-                      className="w-full h-full object-cover"
-                      poster={selectedMedia.thumbnail}
-                    >
-                      <source src={selectedMedia.src} type="video/mp4" />
-                    </video>
-                  </div>
-                ) : (
-                  <div className="max-h-[90vh] flex justify-center">
-                    <img
-                      src={selectedMedia.src}
-                      alt={selectedMedia.title}
-                      className="object-contain rounded-xl"
-                    />
-                  </div>
-                )}
+                <div className="aspect-video bg-black rounded-xl overflow-hidden">
+                  <iframe
+                    src={`${selectedMedia.src}?autoplay=1`}
+                    title={selectedMedia.title}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    frameBorder="0"
+                  ></iframe>
+                </div>
 
                 <div className="mt-4 text-center">
                   <h3 className="text-xl font-bold text-white">
