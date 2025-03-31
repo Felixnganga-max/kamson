@@ -84,37 +84,37 @@ const Navigation = ({ aboutRef, eventsRef }) => {
     if (eventsRef && eventsRef.current) {
       // Get the element's position relative to the viewport
       const rect = eventsRef.current.getBoundingClientRect();
-      
+
       // Calculate the position to scroll to:
       // Current scroll position + element's top position - offset
       const isMobile = window.innerWidth < 768;
-      
+
       // Use pixel values instead of vh percentages for more reliable scrolling
       const mobileOffset = 70; // approximately equivalent to 0.9vh on most devices
       const desktopOffset = 100; // approximately equivalent to 0.12vh on most devices
-      
+
       const offset = isMobile ? mobileOffset : desktopOffset;
-      
+
       // Calculate final scroll position
       const scrollPosition = window.pageYOffset + rect.top - offset;
-      
+
       // Perform the scroll
       window.scrollTo({
         top: scrollPosition,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
     }
   };
-  
-  // Regular scroll for about section 
+
+  // Regular scroll for about section
   const scrollToAbout = () => {
     if (aboutRef && aboutRef.current) {
       const rect = aboutRef.current.getBoundingClientRect();
       const scrollPosition = window.pageYOffset + rect.top - 50; // Small offset for better positioning
-      
+
       window.scrollTo({
         top: scrollPosition,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
     }
   };
