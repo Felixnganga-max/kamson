@@ -176,7 +176,9 @@ const Footer = () => {
         {/* Copyright and Bottom Links */}
         <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center">
           <div className="mb-4 md:mb-0">
-            <p>&copy; {currentYear} Artist Name. All rights reserved.</p>
+            <p>
+              &copy; {currentYear} Kamson Entertainment. All rights reserved.
+            </p>
           </div>
           <div className="flex space-x-6">
             <a
