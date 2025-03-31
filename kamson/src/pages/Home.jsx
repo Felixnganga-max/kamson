@@ -28,7 +28,7 @@ const Home = () => {
       <Gallery ref={galleryRef} />
       <About ref={aboutRef} />
 
-      <Footer />
+      {/* <Footer /> */}
     </>
   );
 };
