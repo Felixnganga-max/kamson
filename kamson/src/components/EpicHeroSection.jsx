@@ -217,7 +217,7 @@ const EpicHeroSection = ({ onBookEvents }) => {
             icon: YoutubeIcon,
             color: "text-red-600 hover:text-red-400",
             handle: "ArtistChannel",
-            link: "#youtube",
+            link: "https://www.youtube.com/@KAMSONOFFICIAL",
           },
           {
             icon: FacebookIcon,
