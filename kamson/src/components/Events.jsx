@@ -127,7 +127,7 @@ const Events = () => {
     return () => clearInterval(interval);
   }, [upcomingEvents]);
 
-  // FIX: Typing animation effect
+  // Typing animation effect
   useEffect(() => {
     // Only run if modal is showing and we have content
     if (!showModal || !modalContent) return;
@@ -194,15 +194,6 @@ const Events = () => {
     };
   }, [showModal, modalContent]);
 
-  // Play sound when modal opens
-  const playJoyfulSound = () => {
-    const audio = new Audio(
-      "https://assets.mixkit.co/sfx/preview/mixkit-positive-interface-beep-221.mp3"
-    );
-    audio.volume = 0.3;
-    audio.play().catch((e) => console.log("Audio play failed:", e));
-  };
-
   // Form submission handler
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -233,7 +224,7 @@ const Events = () => {
     setShowModal(false);
   };
 
-  // FIX: Show modal for testing regardless of events
+  // Show modal for events
   useEffect(() => {
     // Add a slight delay to ensure the component is fully mounted
     const timer = setTimeout(() => {
@@ -246,13 +237,12 @@ const Events = () => {
             .join(", ")}. Don't miss out! 🎶`
         );
       } else {
-        // For testing: Show modal even if no events today
+        // Show modal even if no events today
         setModalContent(
           "We have some amazing events coming up soon! Check out our schedule and don't miss out! 🎶"
         );
       }
       setShowModal(true);
-      playJoyfulSound();
       setHasShownModal(true);
     }, 1000);
 
@@ -450,7 +440,7 @@ const Events = () => {
         </motion.div>
       )}
 
-      {/* Joyful Modal - FIXED */}
+      {/* Joyful Modal */}
       <AnimatePresence>
         {showModal && (
           <motion.div

@@ -1,12 +1,12 @@
 const cloudinary = require("cloudinary").v2;
 const multer = require("multer");
+const streamifier = require("streamifier");
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "dfuv6m4va",
-  api_key: process.env.CLOUDINARY_API_KEY || "528637913152672",
-  api_secret:
-    process.env.CLOUDINARY_API_SECRET || "kyLOb0R45nMaH-3c2AgxoDwRw1A",
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 // Multer Storage (Memory)
@@ -33,15 +33,10 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 800 * 1024 * 1024 }, // 20MB limit
+  limits: { fileSize: 100 * 1024 * 1024 }, // 20MB limit (reduced from 800MB)
 });
 
-// For large video uploads, use stream-based approach instead of base64
-const uploadToCloudinary = async (
-  fileBuffer,
-  mimetype,
-  folder = "products"
-) => {
+const uploadToCloudinary = async (fileBuffer, mimetype, folder = "uploads") => {
   try {
     if (!fileBuffer) throw new Error("No file provided");
 
@@ -52,7 +47,6 @@ const uploadToCloudinary = async (
       // For video uploads, use a more efficient approach
       if (fileType === "video") {
         // Create a Readable stream from the buffer
-        const streamifier = require("streamifier");
         const stream = streamifier.createReadStream(fileBuffer);
 
         // Use Cloudinary's upload_stream API
@@ -93,6 +87,7 @@ const uploadToCloudinary = async (
     throw new Error(`File upload failed: ${error.message}`);
   }
 };
+
 // Delete from Cloudinary
 const deleteFromCloudinary = async (fileUrl) => {
   try {
