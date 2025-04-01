@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Menu,
@@ -14,19 +13,45 @@ import {
   EyeOff,
 } from "lucide-react";
 
-const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
+const LoginModal = ({ isOpen, onClose }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Simple authentication - replace with your actual auth logic
-    if (email === "admin@example.com" && password === "password") {
-      onLoginSuccess();
-    } else {
-      setError("Invalid credentials");
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("https://kamson-558z.vercel.app/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Store token and user data in localStorage
+        localStorage.setItem("authToken", data.token);
+        localStorage.setItem("userData", JSON.stringify(data.user));
+        
+        // Redirect to admin dashboard
+        navigate("/admin");
+      } else {
+        setError(data.message || "Login failed. Please check your credentials.");
+      }
+    } catch (err) {
+      setError("Network error. Please try again later.");
+      console.error("Login error:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -40,19 +65,20 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 focus:outline-none"
+            disabled={isLoading}
             aria-label="Close modal"
           >
             <X size={24} />
           </button>
         </div>
-
+        
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="text-red-500 text-sm text-center py-2 px-3 bg-red-50 rounded-md">
               {error}
             </div>
           )}
-
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Email
@@ -63,10 +89,10 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
-              placeholder="admin@example.com"
+              disabled={isLoading}
             />
           </div>
-
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Password
@@ -78,24 +104,26 @@ const LoginModal = ({ isOpen, onClose, onLoginSuccess }) => {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 pr-10"
                 required
-                placeholder="password"
+                disabled={isLoading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                disabled={isLoading}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
-
+          
           <button
             type="submit"
-            className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+            className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading}
           >
-            Login
+            {isLoading ? "Logging in..." : "Login"}
           </button>
         </form>
       </div>
@@ -293,9 +321,6 @@ const Navigation = ({ aboutRef, eventsRef }) => {
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
-        onLoginSuccess={() => {
-          navigate("/admin");
-        }}
       />
     </>
   );

@@ -4,99 +4,114 @@ import { LogOut, Sun, Moon, Coffee, Sunrise, Sunset } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ManageEvents from "../components/ManageEvents";
 import AddEvents from "../components/AddEvents";
+// import AddVideo from "../components/AddVideo";
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState("manage");
   const [timeOfDay, setTimeOfDay] = useState("");
   const [currentTime, setCurrentTime] = useState("");
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
   // Get user data from token on component mount
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("authToken");
     if (!token) {
-      navigate("/login"); // Redirect if no token
+      navigate("/");
       return;
     }
 
-    try {
-      // Decode token to get user info (in a real app, you might want to verify the token)
-      const decoded = JSON.parse(atob(token.split(".")[1]));
-      setUser({
-        name: decoded.name || "Admin",
-        role: decoded.role || "Administrator",
-      });
-    } catch (err) {
-      console.error("Error decoding token:", err);
-      handleLogout();
-    }
+    const verifyToken = async () => {
+      setIsLoading(true);
+      try {
+        // Verify token with backend in a real app
+        const decoded = JSON.parse(atob(token.split(".")[1]));
+
+        // Check token expiration
+        if (decoded.exp * 1000 < Date.now()) {
+          throw new Error("Token expired");
+        }
+
+        setUser({
+          name: decoded.name || "Admin",
+          role: decoded.role || "Administrator",
+        });
+      } catch (err) {
+        console.error("Authentication error:", err);
+        handleLogout();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    verifyToken();
   }, [navigate]);
 
   // Set time greeting based on East Africa Time (EAT)
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-
-      // Set to East Africa Time (UTC+3)
+    const getEATTime = () => {
       const options = {
         timeZone: "Africa/Nairobi",
         hour: "numeric",
-        minute: "numeric",
-        hour12: true,
+        hour12: false,
       };
-      const eatTime = now.toLocaleTimeString("en-US", options);
-      setCurrentTime(eatTime);
 
-      const hours = now.getUTCHours() + 3; // Convert to EAT (UTC+3)
+      return {
+        hours: parseInt(new Date().toLocaleString("en-US", options), 10),
+        timeString: new Date().toLocaleTimeString("en-US", {
+          timeZone: "Africa/Nairobi",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+    };
 
-      if (hours >= 5 && hours < 9) {
-        setTimeOfDay("dawn");
-      } else if (hours >= 9 && hours < 12) {
-        setTimeOfDay("morning");
-      } else if (hours >= 12 && hours < 14) {
-        setTimeOfDay("noon");
-      } else if (hours >= 14 && hours < 17) {
-        setTimeOfDay("afternoon");
-      } else if (hours >= 17 && hours < 19) {
-        setTimeOfDay("dusk");
-      } else if (hours >= 19 && hours < 22) {
-        setTimeOfDay("evening");
-      } else {
-        setTimeOfDay("night");
-      }
+    const updateTime = () => {
+      const { hours, timeString } = getEATTime();
+      setCurrentTime(timeString);
+
+      if (hours >= 5 && hours < 9) setTimeOfDay("dawn");
+      else if (hours < 12) setTimeOfDay("morning");
+      else if (hours === 12) setTimeOfDay("noon");
+      else if (hours < 17) setTimeOfDay("afternoon");
+      else if (hours < 19) setTimeOfDay("dusk");
+      else if (hours < 22) setTimeOfDay("evening");
+      else setTimeOfDay("night");
     };
 
     updateTime();
-    const interval = setInterval(updateTime, 60000); // Update every minute
+    const interval = setInterval(updateTime, 60000);
 
     return () => clearInterval(interval);
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userData");
     navigate("/");
   };
 
   const getGreeting = () => {
-    const name = user?.name || "Admin";
+    if (!user) return "Loading...";
+    const name = user.name || "Admin";
     switch (timeOfDay) {
       case "dawn":
         return `Rise and shine, ${name}!`;
       case "morning":
-        return `A splendid morning to you, ${name}`;
+        return `Good morning, ${name}`;
       case "noon":
-        return `Perfect noontime, ${name}`;
+        return `Good afternoon, ${name}`;
       case "afternoon":
-        return `Productive afternoon, ${name}`;
+        return `Good afternoon, ${name}`;
       case "dusk":
-        return `Golden hour greetings, ${name}`;
+        return `Good evening, ${name}`;
       case "evening":
-        return `A serene evening, ${name}`;
+        return `Good evening, ${name}`;
       case "night":
-        return `Starry night wishes, ${name}`;
+        return `Good night, ${name}`;
       default:
-        return `Welcome back, ${name}`;
+        return `Welcome, ${name}`;
     }
   };
 
@@ -117,14 +132,27 @@ const Admin = () => {
       case "night":
         return <Moon className="h-5 w-5 text-blue-700" />;
       default:
-        return <Coffee className="h-5 w-5 text-brown-500" />;
+        return <Coffee className="h-5 w-5 text-amber-800" />;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+        <div className="text-center">
+          <h2 className="text-xl font-medium text-gray-700">
+            Authentication Required
+          </h2>
+          <p className="mt-2 text-gray-500">Redirecting to home page...</p>
+        </div>
       </div>
     );
   }
@@ -134,7 +162,6 @@ const Admin = () => {
       {/* Admin Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          {/* Hidden on mobile */}
           <div className="hidden sm:flex items-center space-x-4">
             <h1 className="text-xl md:text-2xl font-bold text-gray-900">
               Admin Dashboard
@@ -165,7 +192,6 @@ const Admin = () => {
                 </div>
               </div>
 
-              {/* Logout Button */}
               <button
                 onClick={handleLogout}
                 className="p-1 sm:p-2 rounded-full hover:bg-gray-100 text-gray-600 transition-colors"
@@ -203,9 +229,9 @@ const Admin = () => {
               Add New Event
             </button>
             <button
-              onClick={() => setActiveTab("add")}
+              onClick={() => setActiveTab("video")}
               className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-xs sm:text-sm ${
-                activeTab === "add"
+                activeTab === "video"
                   ? "border-purple-500 text-purple-600"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
@@ -224,7 +250,9 @@ const Admin = () => {
           transition={{ duration: 0.3 }}
           className="bg-white rounded-lg shadow overflow-hidden"
         >
-          {activeTab === "manage" ? <ManageEvents /> : <AddEvents />}
+          {activeTab === "manage" && <ManageEvents />}
+          {/* {activeTab === "add" && <AddEvents />} */}
+          {/* {activeTab === "video" && <AddVideo />} */}
         </motion.div>
       </main>
     </div>
