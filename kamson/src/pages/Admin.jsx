@@ -4,7 +4,7 @@ import { LogOut, Sun, Moon, Coffee, Sunrise, Sunset } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ManageEvents from "../components/ManageEvents";
 import AddEvents from "../components/AddEvents";
-// import AddVideo from "../components/AddVideo";
+import AddVideos from "../components/AddVideos";
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState("manage");
@@ -251,8 +251,8 @@ const Admin = () => {
           className="bg-white rounded-lg shadow overflow-hidden"
         >
           {activeTab === "manage" && <ManageEvents />}
-          {/* {activeTab === "add" && <AddEvents />} */}
-          {/* {activeTab === "video" && <AddVideo />} */}
+          {activeTab === "add" && <AddEvents />}
+          {activeTab === "video" && <AddVideos />}
         </motion.div>
       </main>
     </div>
