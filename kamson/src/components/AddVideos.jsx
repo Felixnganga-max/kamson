@@ -9,17 +9,17 @@ const AddVideos = () => {
     type: "video", // Default to video
     category: "Live Performance", // Default category
     file: null,
-    thumbnail: null,
     isSubmitting: false,
   });
 
-  // Preview states
+  // Preview state
   const [filePreview, setFilePreview] = useState(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState(null);
 
-  // Refs for file inputs
+  // Upload progress state
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Ref for file input
   const fileInputRef = useRef(null);
-  const thumbnailInputRef = useRef(null);
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -49,20 +49,6 @@ const AddVideos = () => {
     }
   };
 
-  // Handle thumbnail selection (for videos)
-  const handleThumbnailChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setFormData({
-      ...formData,
-      thumbnail: file,
-    });
-
-    const imageUrl = URL.createObjectURL(file);
-    setThumbnailPreview(imageUrl);
-  };
-
   // Reset form
   const resetForm = () => {
     setFormData({
@@ -70,15 +56,13 @@ const AddVideos = () => {
       type: "video",
       category: "Live Performance",
       file: null,
-      thumbnail: null,
       isSubmitting: false,
     });
     setFilePreview(null);
-    setThumbnailPreview(null);
+    setUploadProgress(0);
 
-    // Reset file inputs
+    // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = "";
-    if (thumbnailInputRef.current) thumbnailInputRef.current.value = "";
   };
 
   // Handle form submission
@@ -101,15 +85,13 @@ const AddVideos = () => {
     uploadData.append("title", formData.title);
     uploadData.append("type", formData.type);
     uploadData.append("category", formData.category);
-    uploadData.append("file", formData.file);
 
-    // If it's a video and has a thumbnail, add it
-    if (formData.type === "video" && formData.thumbnail) {
-      uploadData.append("thumbnail", formData.thumbnail);
-    }
+    // Use "src" as the field name for the file as expected by MongoDB
+    uploadData.append("src", formData.file);
 
     try {
       setFormData({ ...formData, isSubmitting: true });
+      setUploadProgress(0);
 
       // Send request to backend
       const response = await axios.post(
@@ -120,12 +102,11 @@ const AddVideos = () => {
             "Content-Type": "multipart/form-data",
           },
           onUploadProgress: (progressEvent) => {
-            // You could add progress tracking here if needed
-            console.log(
-              `Upload Progress: ${Math.round(
-                (progressEvent.loaded / progressEvent.total) * 100
-              )}%`
+            const percentCompleted = Math.round(
+              (progressEvent.loaded / progressEvent.total) * 100
             );
+            setUploadProgress(percentCompleted);
+            console.log(`Upload Progress: ${percentCompleted}%`);
           },
         }
       );
@@ -146,7 +127,7 @@ const AddVideos = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-center text-indigo-700">
+      <h2 className="text-2xl font-bold mb-6 text-center text-purple-600">
         Add Media Content
       </h2>
 
@@ -161,7 +142,7 @@ const AddVideos = () => {
               name="type"
               value={formData.type}
               onChange={handleInputChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="video">Video</option>
               <option value="image">Image</option>
@@ -177,7 +158,7 @@ const AddVideos = () => {
               name="category"
               value={formData.category}
               onChange={handleInputChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="Live Performance">Live Performance</option>
               <option value="Behind the Scenes">Behind the Scenes</option>
@@ -196,7 +177,7 @@ const AddVideos = () => {
             value={formData.title}
             onChange={handleInputChange}
             placeholder="Enter a descriptive title"
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             required
           />
         </div>
@@ -210,7 +191,7 @@ const AddVideos = () => {
             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
               <div className="flex flex-col items-center justify-center pt-5 pb-6">
                 <svg
-                  className="w-8 h-8 mb-3 text-gray-500"
+                  className="w-8 h-8 mb-3 text-purple-500"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -268,41 +249,21 @@ const AddVideos = () => {
           </div>
         )}
 
-        {/* Thumbnail Upload (only for videos) */}
-        {formData.type === "video" && (
+        {/* Upload Progress Bar */}
+        {formData.isSubmitting && (
           <div className="mb-4">
             <label className="block text-gray-700 font-semibold mb-2">
-              Thumbnail Image (Optional)
+              Upload Progress
             </label>
-            <div className="flex items-center justify-center w-full">
-              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <p className="mb-2 text-sm text-gray-500">
-                    <span className="font-semibold">Upload a thumbnail</span>{" "}
-                    for your video
-                  </p>
-                  <p className="text-xs text-gray-500">PNG, JPG, GIF, WEBP</p>
-                </div>
-                <input
-                  ref={thumbnailInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={handleThumbnailChange}
-                  accept="image/*"
-                />
-              </label>
+            <div className="w-full bg-gray-200 rounded-full h-4">
+              <div
+                className="bg-gradient-to-r from-pink-500 to-purple-600 h-4 rounded-full transition-all duration-300 ease-in-out"
+                style={{ width: `${uploadProgress}%` }}
+              ></div>
             </div>
-
-            {/* Thumbnail Preview */}
-            {thumbnailPreview && (
-              <div className="mt-2 border rounded-lg p-2 bg-gray-50">
-                <img
-                  src={thumbnailPreview}
-                  alt="Thumbnail"
-                  className="w-full h-auto max-h-32 object-contain rounded"
-                />
-              </div>
-            )}
+            <p className="text-sm text-gray-600 mt-1 text-right">
+              {uploadProgress}% Complete
+            </p>
           </div>
         )}
 
@@ -318,7 +279,7 @@ const AddVideos = () => {
           </button>
           <button
             type="submit"
-            className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="px-6 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-md hover:from-pink-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
             disabled={formData.isSubmitting}
           >
             {formData.isSubmitting ? (
@@ -343,7 +304,7 @@ const AddVideos = () => {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   ></path>
                 </svg>
-                <span>Uploading...</span>
+                <span>Uploading... {uploadProgress}%</span>
               </div>
             ) : (
               `Upload ${formData.type === "video" ? "Video" : "Image"}`
