@@ -148,7 +148,7 @@ const ManageEvents = () => {
 
       let response;
       if (isEditing && currentEvent) {
-        response = await axios.put(
+        response = await axios.patch(
           `https://kamson-558z.vercel.app/api/events/${currentEvent._id}`,
           formDataToSend,
           {
