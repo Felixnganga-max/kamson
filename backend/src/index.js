@@ -1,6 +1,6 @@
 const path = require("path");
 
-// Load env FIRST, so modules required below can read process.env at load time
+// Load env FIRST (on Vercel, variables come from project settings; this is harmless there)
 require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const express = require("express");
@@ -19,13 +19,12 @@ const mediaRoutes = require("./routers/mediaRoutes");
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
 
-// Needed behind cPanel/nginx/Passenger so rate limiting sees real client IPs
-if (isProd) app.set("trust proxy", 1);
+// Vercel (and cPanel/nginx) sit behind a proxy; needed for correct client IPs
+app.set("trust proxy", 1);
 
 // ---------------------------------------------------------------------------
-// CORS
-// Origins have NO trailing slash. Extra origins can be added through
-// CORS_ORIGIN in .env as a comma-separated list.
+// CORS (origins have NO trailing slash)
+// Extra origins can be added via CORS_ORIGIN as a comma-separated list.
 // ---------------------------------------------------------------------------
 const defaultOrigins = [
   "https://www.kamson.co.ke",
@@ -44,7 +43,7 @@ const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
 app.use(
   cors({
     origin(origin, callback) {
-      // Allow non-browser clients (Postman, curl, server-to-server) with no Origin header
+      // Allow non-browser clients (Postman, curl) that send no Origin header
       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
@@ -53,22 +52,45 @@ app.use(
   })
 );
 
-// Allow images/videos served by this API to load on the frontend origin
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
-// Body parsers (large uploads should go through multipart/multer, not JSON)
+// Vercel functions reject request bodies over ~4.5MB regardless of these limits.
+// Upload large media straight to your storage provider (Cloudinary, S3, etc.).
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ limit: "25mb", extended: true }));
 
-// Sanitizers must run AFTER body parsing, or they never see req.body
+// Sanitizers must run AFTER body parsing
 app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
 
+// ---------------------------------------------------------------------------
+// Database: connect once per serverless instance and reuse the connection
+// ---------------------------------------------------------------------------
+let dbPromise = null;
+const ensureDB = () => {
+  if (!dbPromise) {
+    dbPromise = Promise.resolve(connectDB()).catch((err) => {
+      dbPromise = null; // allow a retry on the next request
+      throw err;
+    });
+  }
+  return dbPromise;
+};
+
+app.use(async (req, res, next) => {
+  try {
+    await ensureDB();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per window
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: {
     status: "fail",
     message: "Too many requests from this IP, please try again later",
@@ -81,15 +103,11 @@ app.use("/api/events", eventRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/media", mediaRoutes);
 
-// Health check endpoint
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "success",
-    message: "Server is running healthy",
-  });
+  res.status(200).json({ status: "success", message: "Server is running healthy" });
 });
 
-// 404 handler (app.use instead of app.all("*") so it works on Express 4 and 5)
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     status: "fail",
@@ -117,27 +135,32 @@ app.use((err, req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Startup and shutdown
+// Export for Vercel; only listen when run directly (node src/index.js)
 // ---------------------------------------------------------------------------
-let server;
+module.exports = app;
 
-const shutdown = (label, err) => {
-  console.error(`${label}! Shutting down...`);
-  console.error(err);
-  if (server) server.close(() => process.exit(1));
-  else process.exit(1);
-};
+if (require.main === module) {
+  let server;
 
-process.on("unhandledRejection", (err) => shutdown("UNHANDLED REJECTION", err));
-process.on("uncaughtException", (err) => shutdown("UNCAUGHT EXCEPTION", err));
+  const shutdown = (label, err) => {
+    console.error(`${label}! Shutting down...`);
+    console.error(err);
+    if (server) server.close(() => process.exit(1));
+    else process.exit(1);
+  };
 
-(async () => {
-  await connectDB(); // don't accept requests until the DB is connected
-  const PORT = process.env.PORT || 5000;
-  server = app.listen(PORT, () => {
-    console.log(
-      `Server running in ${process.env.NODE_ENV || "development"} mode on port ${PORT}`
-    );
-    console.log("Allowed CORS origins:", allowedOrigins.join(", "));
-  });
-})().catch((err) => shutdown("STARTUP FAILED", err));
+  process.on("unhandledRejection", (err) => shutdown("UNHANDLED REJECTION", err));
+  process.on("uncaughtException", (err) => shutdown("UNCAUGHT EXCEPTION", err));
+
+  ensureDB()
+    .then(() => {
+      const PORT = process.env.PORT || 5000;
+      server = app.listen(PORT, () => {
+        console.log(
+          `Server running in ${process.env.NODE_ENV || "development"} mode on port ${PORT}`
+        );
+        console.log("Allowed CORS origins:", allowedOrigins.join(", "));
+      });
+    })
+    .catch((err) => shutdown("STARTUP FAILED", err));
+}
