@@ -1,53 +1,79 @@
+const path = require("path");
+
+// Load env FIRST, so modules required below can read process.env at load time
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
+
 const express = require("express");
 const cors = require("cors");
-const dotenv = require("dotenv");
-const connectDB = require("../src/config/database");
-const eventRoutes = require("../src/routers/eventRouters");
-const authRoutes = require("./routers/authRoutes");
-const mediaRoutes = require("./routers/mediaRoutes");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
 const xss = require("xss-clean");
 const hpp = require("hpp");
-const path = require("path");
 
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, "../.env") });
+const connectDB = require("./config/database");
+const eventRoutes = require("./routers/eventRouters");
+const authRoutes = require("./routers/authRoutes");
+const mediaRoutes = require("./routers/mediaRoutes");
 
-// Create Express app
 const app = express();
+const isProd = process.env.NODE_ENV === "production";
 
-// Connect to Database
-connectDB();
+// Needed behind cPanel/nginx/Passenger so rate limiting sees real client IPs
+if (isProd) app.set("trust proxy", 1);
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: "Too many requests from this IP, please try again later",
-});
+// ---------------------------------------------------------------------------
+// CORS
+// Origins have NO trailing slash. Extra origins can be added through
+// CORS_ORIGIN in .env as a comma-separated list.
+// ---------------------------------------------------------------------------
+const defaultOrigins = [
+  "https://www.kamson.co.ke",
+  "https://kamson.co.ke",
+  "http://localhost:5173",
+];
 
-// Security middleware
-app.use(helmet()); // Set security HTTP headers
-app.use(mongoSanitize()); // Sanitize data against NoSQL injection
-app.use(xss()); // Sanitize data against XSS
-app.use(hpp()); // Protect against HTTP Parameter Pollution
+const envOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",")
+      .map((o) => o.trim().replace(/\/+$/, ""))
+      .filter(Boolean)
+  : [];
 
-// Enable CORS
+const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    origin(origin, callback) {
+      // Allow non-browser clients (Postman, curl, server-to-server) with no Origin header
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// Set payload size limits
-app.use(express.json({ limit: "25mb" }));
-app.use(express.urlencoded({ limit: "800mb", extended: true }));
+// Allow images/videos served by this API to load on the frontend origin
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
-// Apply rate limiting to API routes
+// Body parsers (large uploads should go through multipart/multer, not JSON)
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ limit: "25mb", extended: true }));
+
+// Sanitizers must run AFTER body parsing, or they never see req.body
+app.use(mongoSanitize());
+app.use(xss());
+app.use(hpp());
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per window
+  message: {
+    status: "fail",
+    message: "Too many requests from this IP, please try again later",
+  },
+});
 app.use("/api", limiter);
 
 // Routes
@@ -63,8 +89,8 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Handle 404 routes
-app.all("*", (req, res, next) => {
+// 404 handler (app.use instead of app.all("*") so it works on Express 4 and 5)
+app.use((req, res) => {
   res.status(404).json({
     status: "fail",
     message: `Can't find ${req.originalUrl} on this server!`,
@@ -73,47 +99,45 @@ app.all("*", (req, res, next) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  err.statusCode = err.statusCode || 500;
-  err.status = err.status || "error";
+  const statusCode =
+    err.statusCode || (Number.isInteger(err.status) ? err.status : 500);
 
   console.error(err.stack);
 
-  if (process.env.NODE_ENV === "development") {
-    res.status(err.statusCode).json({
-      status: err.status,
-      message: err.message,
-      error: err,
-      stack: err.stack,
-    });
-  } else {
-    // Production - don't leak stack trace
-    res.status(err.statusCode).json({
-      status: err.status,
-      message: err.message || "Something went wrong!",
-    });
-  }
+  const body = {
+    status: statusCode >= 500 ? "error" : "fail",
+    message:
+      isProd && statusCode >= 500
+        ? "Something went wrong!"
+        : err.message || "Something went wrong!",
+  };
+  if (!isProd) body.stack = err.stack;
+
+  res.status(statusCode).json(body);
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
+// ---------------------------------------------------------------------------
+// Startup and shutdown
+// ---------------------------------------------------------------------------
+let server;
 
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (err) => {
-  console.error("UNHANDLED REJECTION! 💥 Shutting down...");
-  console.error(err.name, err.message);
-  server.close(() => {
-    process.exit(1);
+const shutdown = (label, err) => {
+  console.error(`${label}! Shutting down...`);
+  console.error(err);
+  if (server) server.close(() => process.exit(1));
+  else process.exit(1);
+};
+
+process.on("unhandledRejection", (err) => shutdown("UNHANDLED REJECTION", err));
+process.on("uncaughtException", (err) => shutdown("UNCAUGHT EXCEPTION", err));
+
+(async () => {
+  await connectDB(); // don't accept requests until the DB is connected
+  const PORT = process.env.PORT || 5000;
+  server = app.listen(PORT, () => {
+    console.log(
+      `Server running in ${process.env.NODE_ENV || "development"} mode on port ${PORT}`
+    );
+    console.log("Allowed CORS origins:", allowedOrigins.join(", "));
   });
-});
-
-// Handle uncaught exceptions
-process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT EXCEPTION! 💥 Shutting down...");
-  console.error(err.name, err.message);
-  server.close(() => {
-    process.exit(1);
-  });
-});
+})().catch((err) => shutdown("STARTUP FAILED", err));
